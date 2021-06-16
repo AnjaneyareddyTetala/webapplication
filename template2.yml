@@ -1,0 +1,227 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+
+Parameters:
+  DatabaseName:
+    Type: String
+    Default: database-flights
+  TableName:
+    Type: String
+    Default: manual-table-flights
+  ClassifierName:
+    Type: String
+    Default: classifier-json-one-column
+  CrawlerName:
+    Type: String
+    Default: crawler-flights
+  TablePrefixName:
+    Type: String
+    Default: sample
+  JobName:
+    Type: String
+    Default: job-S3-to-S3
+  TriggerName:
+    Type: String
+    Default: trigger-ondemand-flights
+# Resources section defines metadata for the Data Catalog
+Resources:
+#Create IAM Role assumed by the crawler. For demonstration, this role is given all permissions.
+  RoleFlights:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "glue.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        -
+          PolicyName: "root"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Effect: "Allow"
+                Action: "*"
+                Resource: "*"
+ # Create a database to contain tables created by the crawler
+  DatabaseFlights:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: !Ref DatabaseName
+        Description: "AWS Glue container to hold metadata tables for the flights crawler"
+
+# Create an AWS Glue table
+  TableFlights:
+    # Creating the table waits for the database to be created
+    DependsOn: DatabaseFlights
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref DatabaseName
+      TableInput:
+        Name: !Ref TableName
+        Description: Define the first few columns of the flights table
+        TableType: EXTERNAL_TABLE
+        Parameters: {
+    "classification": "csv"
+  }
+#       ViewExpandedText: String
+        PartitionKeys:
+        # Data is partitioned by month
+        - Name: mon
+          Type: bigint
+        StorageDescriptor:
+          OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+          Columns:
+          - Name: year
+            Type: bigint
+          - Name: quarter
+            Type: bigint
+          - Name: month
+            Type: bigint
+          - Name: day_of_month
+            Type: bigint			
+          InputFormat: org.apache.hadoop.mapred.TextInputFormat
+          Location: s3://crawler-public-us-east-1/flight/2016/csv/
+          SerdeInfo:
+            Parameters:
+              field.delim: ","
+            SerializationLibrary: org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe
+# Partition 1
+# Create an AWS Glue partition  
+  PartitionMon1:
+    DependsOn: TableFlights
+    Type: AWS::Glue::Partition
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref DatabaseName
+      TableName: !Ref TableName
+      PartitionInput:
+        Values:
+        - 1
+        StorageDescriptor:
+          OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+          Columns:
+          - Name: mon
+            Type: bigint
+          InputFormat: org.apache.hadoop.mapred.TextInputFormat
+          Location: s3://crawler-public-us-east-1/flight/2016/csv/mon=1/
+          SerdeInfo:
+            Parameters:
+              field.delim: ","
+            SerializationLibrary: org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe
+# Partition 2
+# Create an AWS Glue partition 
+  PartitionMon2:
+    DependsOn: TableFlights
+    Type: AWS::Glue::Partition
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref DatabaseName
+      TableName: !Ref TableName
+      PartitionInput:
+        Values:
+        - 2
+        StorageDescriptor:
+          OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+          Columns:
+          - Name: mon
+            Type: bigint
+          InputFormat: org.apache.hadoop.mapred.TextInputFormat
+          Location: s3://crawler-public-us-east-1/flight/2016/csv/mon=2/
+          SerdeInfo:
+            Parameters:
+              field.delim: ","
+            SerializationLibrary: org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe
+# Partition 3
+# Create an AWS Glue partition 
+  PartitionMon3:
+    DependsOn: TableFlights
+    Type: AWS::Glue::Partition
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref DatabaseName
+      TableName: !Ref TableName
+      PartitionInput:
+        Values:
+        - 3
+        StorageDescriptor:
+          OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+          Columns:
+          - Name: mon
+            Type: bigint
+          InputFormat: org.apache.hadoop.mapred.TextInputFormat
+          Location: s3://crawler-public-us-east-1/flight/2016/csv/mon=3/
+          SerdeInfo:
+            Parameters:
+              field.delim: ","
+            SerializationLibrary: org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe
+# Partition 4
+# Create an AWS Glue partition 
+  PartitionMon4:
+    DependsOn: TableFlights
+    Type: AWS::Glue::Partition
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref DatabaseName
+      TableName: !Ref TableName
+      PartitionInput:
+        Values:
+        - 4
+        StorageDescriptor:
+          OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+          Columns:
+          - Name: mon
+            Type: bigint
+          InputFormat: org.apache.hadoop.mapred.TextInputFormat
+          Location: s3://crawler-public-us-east-1/flight/2016/csv/mon=4/
+          SerdeInfo:
+            Parameters:
+              field.delim: ","
+            SerializationLibrary: org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe
+
+ #Create a crawler to crawl the flights data on a public S3 bucket
+  CrawlerFlights:
+    Type: AWS::Glue::Crawler
+    Properties:
+      Name: !Ref CrawlerName
+      Role: !GetAtt RoleFlights.Arn
+      Description: AWS Glue crawler to crawl flights data
+      #Schedule: none, use default run-on-demand
+      DatabaseName: !Ref DatabaseName
+      Targets:
+        S3Targets:
+          # Public S3 bucket with the flights data
+          - Path: "s3://crawler-public-us-east-1/flight/2016/csv"
+      TablePrefix: !Ref TablePrefixName
+      SchemaChangePolicy:
+        UpdateBehavior: "UPDATE_IN_DATABASE"
+        DeleteBehavior: "LOG"
+      Configuration: "{\"Version\":1.0,\"CrawlerOutput\":{\"Partitions\":{\"AddOrUpdateBehavior\":\"InheritFromTable\"},\"Tables\":{\"AddOrUpdateBehavior\":\"MergeNewColumns\"}}}"
+
+  TriggerSample:
+    Type: AWS::Glue::Trigger
+    Properties:
+      Name:
+        Ref: TriggerName
+      Description: Trigger created with CloudFormation
+      Type: ON_DEMAND
+      Actions:
+        - JobName: !Ref JobName
+
+  ClassifierFlights:
+    Type: AWS::Glue::Classifier
+    Properties:
+      JsonClassifier:
+      #JSON Classifier
+        Name: ClassifierName
+        JsonPath: $.Records3[*]
