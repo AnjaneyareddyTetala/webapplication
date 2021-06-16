@@ -17,7 +17,7 @@ Parameters:
     Default: "postgres"
   JDBCPassword:
     Type: String
-    Default: "Testing1234"
+    Default: "Testxxxxx"
     NoEcho: true
 
   DatabaseNamefors3:
