@@ -1,0 +1,103 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+
+Parameters:
+  DatabaseName:
+    Type: String
+    Default: cfn-database-flights-1
+  TableName:
+    Type: String
+    Default: cfn-manual-table-flights-1
+  ClassifierName:
+    Type: String
+    Default: cfn-classifier-json-one-column-1
+  CrawlerName:
+    Type: String
+    Default: cfn-crawler-flights-1
+  TablePrefixName:
+    Type: String
+    Default: cfn_sample_1
+  JobName:
+    Type: String
+    Default: cfn-job-S3-to-S3-1
+  TriggerName:
+    Type: String
+    Default: cfn-trigger-ondemand-flights-1
+# Resources section defines metadata for the Data Catalog
+Resources:
+#Create IAM Role assumed by the crawler. For demonstration, this role is given all permissions.
+  RoleFlights:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "glue.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        -
+          PolicyName: "root"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Effect: "Allow"
+                Action: "*"
+                Resource: "*"
+ # Create a database to contain tables created by the crawler
+  DatabaseFlights:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: !Ref DatabaseName
+        Description: "AWS Glue container to hold metadata tables for the flights crawler"
+ #Create a crawler to crawl the flights data on a public S3 bucket
+  CrawlerFlights:
+    Type: AWS::Glue::Crawler
+    Properties:
+      Name: !Ref CrawlerName
+      Role: !GetAtt RoleFlights.Arn
+      Description: AWS Glue crawler to crawl flights data
+      #Schedule: none, use default run-on-demand
+      DatabaseName: !Ref DatabaseName
+      Targets:
+        S3Targets:
+          # Public S3 bucket with the flights data
+          - Path: "s3://crawler-public-us-east-1/flight/2016/csv"
+      TablePrefix: !Ref TablePrefixName
+      SchemaChangePolicy:
+        UpdateBehavior: "UPDATE_IN_DATABASE"
+        DeleteBehavior: "LOG"
+      Configuration: "{\"Version\":1.0,\"CrawlerOutput\":{\"Partitions\":{\"AddOrUpdateBehavior\":\"InheritFromTable\"},\"Tables\":{\"AddOrUpdateBehavior\":\"MergeNewColumns\"}}}"
+  TriggerSample:
+    Type: AWS::Glue::Trigger
+    Properties:
+      Name:
+        Ref: TriggerName
+      Description: Trigger created with CloudFormation
+      Type: ON_DEMAND
+      Actions:
+        - JobName: !Ref JobName
+
+  CFNClassifierFlights:
+    Type: AWS::Glue::Classifier
+    Properties:
+      XMLClassifier:
+        #XML classifier
+        Name: !Ref ClassifierName
+        Classification: XML
+        RowTag: <Records>
+
+  ClassifierFlights:
+    Type: AWS::Glue::Classifier
+    Properties:
+      JsonClassifier:
+        Name: ClassifierName
+        JsonPath: $.Records3[*]
