@@ -1,0 +1,166 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+# Sample  YAML to demonstrate creating a connection
+#
+# Parameters section contains names that are substituted in the Resources section
+# These parameters are the names the resources created in the Data Catalog
+Parameters:
+# The name of the connection to be created
+  ConnectionName:
+    Type: String
+    Default: connection-postgress
+  JDBCString:
+    Type: String
+    Default: "jdbc:postgresql://testing.czhy8urshlyg.ap-south-1.rds.amazonaws.com:5432/testing"
+  JDBCUser:
+    Type: String
+    Default: "postgres"
+  JDBCPassword:
+    Type: String
+    Default: "Testing1234"
+    NoEcho: true
+
+  DatabaseNamefors3:
+    Type: String
+    Default: s3data
+  DatabaseNameforpostgressql:
+    Type: String
+    Default: postgressdata
+  ClassifierName:
+    Type: String
+    Default: s3-csv
+  S3CrawlerName:
+    Type: String
+    Default: s3datacrawler
+  PostgresCrawlerName:
+    Type: String
+    Default: postgresdatacrawler
+  JDBCPath:
+    Type: String
+    Default: testing/%
+  JobName:
+    Type: String
+    Default: s3-postgress
+
+# Resources section defines metadata for the Data Catalog
+Resources:
+  ConnectionMySQL:
+    Type: AWS::Glue::Connection
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      ConnectionInput:
+        Description: "Connect to PostgressSQL database."
+        ConnectionType: "JDBC"
+        #MatchCriteria: none
+        PhysicalConnectionRequirements:
+          AvailabilityZone: "ap-south-1b"
+          SecurityGroupIdList:
+           - "sg-5bf6fb26"
+          SubnetId: "subnet-1397cc5f"
+        ConnectionProperties: {
+          "JDBC_CONNECTION_URL": !Ref JDBCString,
+          "USERNAME": !Ref JDBCUser,
+          "PASSWORD": !Ref JDBCPassword
+        }
+        Name: !Ref ConnectionName
+
+  Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "glue.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        -
+          PolicyName: "root"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Effect: "Allow"
+                Action: "*"
+                Resource: "*"
+ # Create a database to contain tables created by the crawler
+  Databasefors3:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: !Ref DatabaseNamefors3
+        Description: "AWS Glue container to hold metadata tables for the  crawler"
+
+  DatabasePostgres:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: !Ref DatabaseNameforpostgressql
+        Description: "AWS Glue container to hold metadata tables for the  crawler"
+
+ #Create a crawler to crawl the  data from s3 bucket
+  S3Crawler:
+    Type: AWS::Glue::Crawler
+    Properties:
+      Name: !Ref S3CrawlerName
+      Role: !GetAtt Role.Arn
+      Description: AWS Glue crawler to crawl  data from s3
+      #Schedule: none, use default run-on-demand
+      DatabaseName: !Ref DatabaseNamefors3
+      Targets:
+        S3Targets:
+          # Public S3 bucket with the  data
+          - Path: "s3://aws-glue-cf"
+      SchemaChangePolicy:
+        UpdateBehavior: "UPDATE_IN_DATABASE"
+        DeleteBehavior: "LOG"
+      Configuration: "{\"Version\":1.0,\"CrawlerOutput\":{\"Partitions\":{\"AddOrUpdateBehavior\":\"InheritFromTable\"},\"Tables\":{\"AddOrUpdateBehavior\":\"MergeNewColumns\"}}}"
+
+  PostgresCrawler:
+    Type: AWS::Glue::Crawler
+    Properties:
+      Name: !Ref PostgresCrawlerName
+      Role: !GetAtt Role.Arn
+      Description: AWS Glue crawler to crawl  data from Postgress
+      DatabaseName: !Ref DatabaseNameforpostgressql
+      Targets:
+        JdbcTargets:
+          - ConnectionName: !Ref ConnectionName
+            Path: !Ref JDBCPath
+      SchemaChangePolicy:
+        UpdateBehavior: "UPDATE_IN_DATABASE"
+        DeleteBehavior: "LOG"
+      Configuration: "{\"Version\":1.0,\"CrawlerOutput\":{\"Partitions\":{\"AddOrUpdateBehavior\":\"InheritFromTable\"},\"Tables\":{\"AddOrUpdateBehavior\":\"MergeNewColumns\"}}}"
+  Classifier:
+    Type: AWS::Glue::Classifier
+    Properties:
+      XMLClassifier:
+        #XML classifier
+        Name: !Ref ClassifierName
+        Classification: XML
+        RowTag: <Records>
+
+  MyJob:
+    Type: AWS::Glue::Job
+    Properties:
+      Command:
+        Name: glueetl
+        ScriptLocation: "s3://aws-glue-scripts-634027592918-ap-south-1/root/connect"
+      Connections:
+        Connections:
+        - !Ref ConnectionName
+      DefaultArguments:
+        "--job-bookmark-option": "job-bookmark-enable"
+      ExecutionProperty:
+        MaxConcurrentRuns: 2
+      GlueVersion: 2.0
+      MaxRetries: 0
+      Name: job1
+      Role: !Ref Role
